@@ -1,0 +1,7 @@
+E:\RefineCalc\RefineCalc\bin\Release\RefineCalc.exe.config
+E:\RefineCalc\RefineCalc\bin\Release\RefineCalc.exe
+E:\RefineCalc\RefineCalc\obj\Release\RefineCalc.Form1.resources
+E:\RefineCalc\RefineCalc\obj\Release\RefineCalc.Properties.Resources.resources
+E:\RefineCalc\RefineCalc\obj\Release\RefineCalc.csproj.GenerateResource.cache
+E:\RefineCalc\RefineCalc\obj\Release\RefineCalc.exe
+E:\RefineCalc\RefineCalc\obj\Release\RefineCalc.csproj.Fody.CopyLocal.cache
