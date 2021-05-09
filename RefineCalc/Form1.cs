@@ -157,7 +157,7 @@ namespace RefineCalc
                 pBook = (cBoxPart.SelectedIndex == 0 ? Convert.ToDouble(txtWpBook.Text) : Convert.ToDouble(txtArmBook.Text)) / 10.0;
             int i = 0;
             double accProb = 0.0;
-            double accQ = 1.0;
+            //double accQ = 1.0;
             double tries = 0.0;
             double accGold = 0.0;
             double totalGold = 0.0;
@@ -170,9 +170,9 @@ namespace RefineCalc
             {
                 sugStr += "10+번째 시도입니다";
             }
-            for (; jangGi < 100.0; i++)
+            List<Material> mats = new List<Material>();
+            for (; jangGi < 100.0 && accProb < 1.0; i++)
             {
-                double ppp = tp / currentProb;
                 /*
                 fBig = false;
                 fMed = false;
@@ -216,40 +216,62 @@ namespace RefineCalc
                     }
                 }
                 */
+                double ppp = tp / currentProb;
                 Material mat = Material.CreateMaterial(table.SubNumBig, table.SubNumMed, table.SubNumSmall,
                                                 Convert.ToDouble(txtDisSubBig.Text), Convert.ToDouble(txtDisSubMed.Text), Convert.ToDouble(txtDisSubSmall.Text), currentProb, tableProb,
                                                 txtSubBig.Text, txtSubMed.Text, txtSubSmall.Text, cBoxPart.SelectedIndex == 0 ? txtWpBook.Text : txtArmBook.Text,
                                                 cBoxLevel.SelectedIndex, ppp);
-                double tempProb = currentProb + mat.BonusProb;
-                sugTp = tp + mat.Gold;
-                accProb += accQ * (tempProb / 100.0);
-                accGold += (i + 1) * sugTp * accQ * (tempProb / 100.0);
-                tries += (i + 1) * accQ * (tempProb / 100.0);
-                accQ *= 1 - (tempProb / 100.0);
-                jangGi += tempProb * 0.465;
-                totalGold += sugTp;
+                mats.Add(mat);
+                mat.PartialProb = mat.CalcPartialProb(mats, mats.Count - 1);
+                accGold += (i + 1) * (tp + mat.Gold) * mat.PartialProb;
+                tries += (i + 1) * mat.PartialProb;
+                //accProb += accQ * (tempProb / 100.0);
+                //accGold += (i + 1) * sugTp * accQ * (tempProb / 100.0);
+                //tries += (i + 1) * accQ * (tempProb / 100.0);
+                //accQ *= 1 - (tempProb / 100.0);
+                jangGi += (mat.CurrentProb + mat.BonusProb) * 0.465;
+                totalGold += tp + mat.Gold;
                 if (numOfFails < 10)
                 {
                     currentProb += tableProb * 0.1;
                     numOfFails++;
                     
                 }
-                sugStr += Environment.NewLine + $"{i + 1}) ";
-                if (mat.NumBig > 0) sugStr += $"+가호{mat.NumBig}";
-                if (mat.NumMed > 0) sugStr += $"+축복{mat.NumMed}";
-                if (mat.NumSmall > 0) sugStr += $"+은총{mat.NumSmall}";
-                if (mat.Book) sugStr += "+책";
-                if (!(mat.NumBig > 0) && !(mat.NumMed > 0) && !(mat.NumSmall > 0) && !mat.Book) sugStr += "노숨";
-                if (cBoxDetails.Checked)
-                {
-                    sugStr += Environment.NewLine + $"누적 기댓값: {accProb * 100:F3}%" + Environment.NewLine + $"누적 소모비용: {Convert.ToInt32(totalGold)}G / 장기: {jangGi:F2}%";
-                    sugStr += Environment.NewLine + $"{sugTp:F2}G / {tempProb:F2}% / {sugTp / tempProb:F2}";
-                }
+                //sugStr += Environment.NewLine + $"{i + 1})";
+                //if (mat.NumBig > 0) sugStr += $"+가호{mat.NumBig}";
+                //if (mat.NumMed > 0) sugStr += $"+축복{mat.NumMed}";
+                //if (mat.NumSmall > 0) sugStr += $"+은총{mat.NumSmall}";
+                //if (mat.Book) sugStr += "+책";
+                //if (!(mat.NumBig > 0) && !(mat.NumMed > 0) && !(mat.NumSmall > 0) && !mat.Book) sugStr += "노숨";
+                //if (cBoxDetails.Checked)
+                //{
+                //    sugStr += Environment.NewLine + $"누적 기댓값: {accProb * 100:F3}%" + Environment.NewLine + $"누적 소모비용: {Convert.ToInt32(totalGold)}G / 장기: {jangGi:F2}%";
+                //    sugStr += Environment.NewLine + $"{sugTp:F2}G / {tempProb:F2}% / {sugTp / tempProb:F2}";
+                //}
             }
-            txtResult.AppendText(Environment.NewLine + $"(추천) 장기백까지 {i}회 / 오버값: {jangGi - 100.0:F2}%", Color.Blue);
-            txtResult.AppendText(Environment.NewLine + $"기대확률: {accProb * 100:F3}% / 기대횟수: {tries:F2}", Color.Blue);
+            // Rearrange the mat tables to minimize gold/the number of trials
+            
+            // Display the result
+            txtResult.AppendText(Environment.NewLine + $"(추천) 장기백까지 {i}회 / 오버값: {(mats.Last().AccProb(mats, mats.Count - 1) < 1.0 ? jangGi - 100.0 : 0.00):F2}%", Color.Blue);
+            txtResult.AppendText(Environment.NewLine + $"기대확률: {(mats.Last().AccProb(mats, mats.Count - 1) > 1.0 ? 100.000 : mats.Last().AccProb(mats, mats.Count - 1) * 100):F3}% / 기대횟수: {tries:F2}", Color.Blue);
             txtResult.AppendText(Environment.NewLine + $"기대비용: {Convert.ToInt32(accGold)}G / 최대비용: {Convert.ToInt32(totalGold)}G", Color.Blue);
             txtResult.AppendText(sugStr, Color.Blue);
+            for (i = 0; i < mats.Count; i++)
+            {
+                txtResult.AppendText(Environment.NewLine + $"{i + 1})", Color.Blue);
+                if (mats[i].NumBig > 0) txtResult.AppendText($"+가호{mats[i].NumBig}", Color.Blue);
+                if (mats[i].NumMed > 0) txtResult.AppendText($"+축복{mats[i].NumMed}", Color.Blue);
+                if (mats[i].NumSmall > 0) txtResult.AppendText($"+은총{mats[i].NumSmall}", Color.Blue);
+                if (mats[i].Book) txtResult.AppendText("+책", Color.Blue);
+                if (mats[i].NumBig == 0 && mats[i].NumMed == 0 && mats[i].NumSmall == 0 && !mats[i].Book) txtResult.AppendText("노숨", Color.Blue); ;
+                if (cBoxDetails.Checked)
+                {
+                    txtResult.AppendText(Environment.NewLine + $"누적 기댓값: {mats[i].AccProb(mats, i) * 100:F3}%"
+                        + Environment.NewLine + $"누적 소모비용: {Convert.ToInt32(mats[i].AccGold(mats, i, tp))}G / 장기: {Convert.ToDouble(txtDisJangGi.Text) + mats[i].Janggi(mats, i):F2}%");
+                    txtResult.AppendText(Environment.NewLine + $"{tp + mats[i].Gold:F2}G / {mats[i].CurrentProb + mats[i].BonusProb:F2}% / {(tp + mats[i].Gold) / (mats[i].CurrentProb + mats[i].BonusProb):F2}");
+                    txtResult.AppendText(Environment.NewLine + $"{mats[i].CurrentProb + mats[i].BonusProb:F2}");
+                }
+            }
         }
 
         private void calcEfficiency()

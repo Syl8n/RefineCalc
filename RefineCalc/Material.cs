@@ -8,15 +8,18 @@ namespace RefineCalc
 {
     public class Material
     {
+        public double CurrentProb { get; set; }
         public double BonusProb { get; set; }
         public double Gold { get; set; }
         public int NumBig { get; set; }
         public int NumMed { get; set; }
         public int NumSmall { get; set; }
         public bool Book { get; set; }
+        public double PartialProb { get; set; }
 
-        public Material(double bonusProb, double gold, int numBig, int numMed, int numSmall, bool book)
+        public Material(double currentProb, double bonusProb, double gold, int numBig, int numMed, int numSmall, bool book)
         {
+            CurrentProb = currentProb;
             BonusProb = bonusProb;
             Gold = gold;
             NumBig = numBig;
@@ -102,7 +105,7 @@ namespace RefineCalc
 
             if (book)
             {
-                while (bonusProb - 10 > probMax)
+                while (bonusProb > probMax + 10)
                 {
                     double maxP = new double[] { Convert.ToInt32(numBig > 0) * pBig, Convert.ToInt32(numMed > 0) * pMed,
                                             Convert.ToInt32(numSmall > 0) * pSmall }.Max();
@@ -129,6 +132,8 @@ namespace RefineCalc
                         break;
                     }
                 }
+                if (bonusProb > probMax + 10)
+                    bonusProb = probMax + 10;
             }
             else
             {
@@ -159,9 +164,74 @@ namespace RefineCalc
                         break;
                     }
                 }
+                if (bonusProb > probMax)
+                    bonusProb = probMax;
             }
 
-            return new Material(bonusProb, gold, numBig, numMed, numSmall, book);
+            return new Material(crntProb, bonusProb, gold, numBig, numMed, numSmall, book);
         }
+
+        void ReduceMaterials(double threshold)
+        {
+
+        }
+
+        public double AccGold(List<Material> mats, int index, double baseGold)
+        {
+            if (index == 0)
+            {
+                return baseGold + this.Gold;
+            }
+
+            return baseGold + this.Gold + mats[index - 1].AccGold(mats, index - 1, baseGold);
+        }
+
+        public double Janggi(List<Material> mats, int index)
+        {
+            if (index == 0)
+            {
+                return (this.CurrentProb + this.BonusProb) * 0.465;
+            }
+
+            return (this.CurrentProb + this.BonusProb) * 0.465 + mats[index - 1].Janggi(mats, index - 1);
+        }
+
+        public double AccProb(List<Material> mats, int index)
+        {
+            if (index == 0)
+            {
+                return this.PartialProb;
+            }
+
+            return this.PartialProb + mats[index - 1].AccProb(mats, index - 1);
+        }
+
+        public double CalcPartialProb(List<Material> mats, int index)
+        {
+            double total = 1.0;
+            foreach(Material m in mats)
+            {
+                if (m != mats.Last()) total *= 1 - (m.CurrentProb + m.BonusProb) / 100.0;
+                else total *= (m.CurrentProb + m.BonusProb) / 100.0;
+            }
+
+            return total;
+        }
+
+        public static List<Material> CreateMaterialList()
+        {
+            List<Material> mats = new List<Material>();
+
+            return mats;
+        }
+
+        public static List<Material> RearrangeList(List<Material> mats)
+        {
+
+
+            return mats;
+        }
+
+        
     }
 }
