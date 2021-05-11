@@ -18,4 +18,3 @@ E:\RefineCalc\RefineCalc\obj\Debug\RefineCalc.csproj.Fody.CopyLocal.cache
 E:\RefineCalc\RefineCalc\obj\Debug\RefineCalc.csproj.CopyComplete
 E:\RefineCalc\RefineCalc\obj\Debug\RefineCalc.exe
 E:\RefineCalc\RefineCalc\obj\Debug\RefineCalc.pdb
-E:\RefineCalc\RefineCalc\obj\Debug\RefineCalc.csprojAssemblyReference.cache

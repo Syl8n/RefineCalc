@@ -86,6 +86,7 @@
             this.btnFail = new System.Windows.Forms.Button();
             this.cBoxDetails = new System.Windows.Forms.CheckBox();
             this.label20 = new System.Windows.Forms.Label();
+            this.cBoxOpt = new System.Windows.Forms.CheckBox();
             this.grpEquipment.SuspendLayout();
             this.gBoxMeterials.SuspendLayout();
             this.groupBox1.SuspendLayout();
@@ -654,7 +655,7 @@
             // cBoxDetails
             // 
             this.cBoxDetails.AutoSize = true;
-            this.cBoxDetails.Location = new System.Drawing.Point(384, 352);
+            this.cBoxDetails.Location = new System.Drawing.Point(384, 348);
             this.cBoxDetails.Name = "cBoxDetails";
             this.cBoxDetails.Size = new System.Drawing.Size(100, 16);
             this.cBoxDetails.TabIndex = 6;
@@ -664,11 +665,21 @@
             // label20
             // 
             this.label20.AutoSize = true;
-            this.label20.Location = new System.Drawing.Point(395, 369);
+            this.label20.Location = new System.Drawing.Point(397, 365);
             this.label20.Name = "label20";
             this.label20.Size = new System.Drawing.Size(95, 12);
             this.label20.TabIndex = 7;
             this.label20.Text = "(체크 후 재계산)";
+            // 
+            // cBoxOpt
+            // 
+            this.cBoxOpt.AutoSize = true;
+            this.cBoxOpt.Location = new System.Drawing.Point(384, 380);
+            this.cBoxOpt.Name = "cBoxOpt";
+            this.cBoxOpt.Size = new System.Drawing.Size(60, 16);
+            this.cBoxOpt.TabIndex = 8;
+            this.cBoxOpt.Text = "최적화";
+            this.cBoxOpt.UseVisualStyleBackColor = true;
             // 
             // Form1
             // 
@@ -676,6 +687,7 @@
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.SystemColors.GradientInactiveCaption;
             this.ClientSize = new System.Drawing.Size(660, 408);
+            this.Controls.Add(this.cBoxOpt);
             this.Controls.Add(this.label20);
             this.Controls.Add(this.cBoxDetails);
             this.Controls.Add(this.btnFail);
@@ -761,6 +773,7 @@
         private System.Windows.Forms.Label label6;
         private System.Windows.Forms.CheckBox cBoxDetails;
         private System.Windows.Forms.Label label20;
+        private System.Windows.Forms.CheckBox cBoxOpt;
     }
 }
 

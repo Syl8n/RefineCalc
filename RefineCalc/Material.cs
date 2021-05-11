@@ -8,6 +8,7 @@ namespace RefineCalc
 {
     public class Material
     {
+        private static double tableProb;
         private static double probBig;
         private static double probMed;
         private static double probSmall;
@@ -19,8 +20,9 @@ namespace RefineCalc
         public static double ThresholdMed;
         public static double ThresholdSmall;
         public static double ThresholdBook;
+        private double bonus;
         public double CurrentProb { get; set; }
-        public double BonusProb { get; set; }
+        public double BonusProb { get { return Math.Min(bonus, tableProb); } set { bonus = value; } }
         public double Gold
         {
             get
@@ -39,7 +41,8 @@ namespace RefineCalc
         {
 
         }
-        public Material(double currentProb, double bonusProb, int numBig, int numMed, int numSmall, bool book)
+
+        public Material(double currentProb, double bonusProb, int numBig, int numMed, int numSmall, bool book, double partialProb)
         {
             CurrentProb = currentProb;
             BonusProb = bonusProb;
@@ -47,11 +50,13 @@ namespace RefineCalc
             NumMed = numMed;
             NumSmall = numSmall;
             Book = book;
+            PartialProb = partialProb;
         }
 
-        public static void SetThresholds(double basePrice, double baseProb, double bigPrice, double bigProb, 
+        public static void SetThresholds(double tableProb, double basePrice, double baseProb, double bigPrice, double bigProb, 
                                                 double medPrice, double medProb, double smallPrice, double smallProb, double bookPrice)
         {
+            Material.tableProb = tableProb;
             probBig = bigProb;
             probMed = medProb;
             probSmall = smallProb;
@@ -65,7 +70,7 @@ namespace RefineCalc
             ThresholdBook = baseProb * ((basePrice / baseProb) / (bookPrice / 10.0));
         }
 
-        public Material SetMaterial(double baseProb, double tableProb, int level, int numBig, int numMed, int numSmall)
+        public Material SetMaterial(double baseProb, int level, int numBig, int numMed, int numSmall)
         {
             CurrentProb = baseProb;
             NumBig = Convert.ToInt32(CurrentProb < ThresholdBig) * numBig;
@@ -73,30 +78,30 @@ namespace RefineCalc
             NumSmall = Convert.ToInt32(CurrentProb < ThresholdSmall) * numSmall;
             Book = CurrentProb < ThresholdBook && level <= 8;
 
-            BonusProb = probBig * NumBig + probMed * NumMed + probSmall * NumSmall + Convert.ToInt32(Book) * 10.0;
+            bonus = probBig * NumBig + probMed * NumMed + probSmall * NumSmall + Convert.ToInt32(Book) * 10.0;
 
-            while (CurrentProb + BonusProb > 100.0)
+            while (CurrentProb + bonus > 100.0)
             {
                 double maxP = new double[] { Convert.ToInt32(NumBig > 0) * 1 / ThresholdBig, Convert.ToInt32(NumMed > 0) * 1 / ThresholdMed,
                                             Convert.ToInt32(NumSmall > 0) * 1 / ThresholdSmall, Convert.ToInt32(Book) * 1 / ThresholdBook }.Max();
-                if (maxP == 1 / ThresholdBig && CurrentProb + BonusProb - probBig >= 100.0)
+                if (maxP == 1 / ThresholdBig && CurrentProb + bonus - probBig >= 100.0)
                 {
-                    BonusProb -= probBig;
+                    bonus -= probBig;
                     NumBig--;
                 }
-                else if (maxP == 1 / ThresholdMed && CurrentProb + BonusProb - probMed >= 100.0)
+                else if (maxP == 1 / ThresholdMed && CurrentProb + bonus - probMed >= 100.0)
                 {
-                    BonusProb -= probMed;
+                    bonus -= probMed;
                     NumMed--;
                 }
-                else if (maxP == 1 / ThresholdSmall && CurrentProb + BonusProb - probSmall >= 100.0)
+                else if (maxP == 1 / ThresholdSmall && CurrentProb + bonus - probSmall >= 100.0)
                 {
-                    BonusProb -= probSmall;
+                    bonus -= probSmall;
                     NumSmall--;
                 }
-                else if (maxP == 1 / ThresholdBook && CurrentProb + BonusProb - 10.0 >= 100.0)
+                else if (maxP == 1 / ThresholdBook && CurrentProb + bonus - 10.0 >= 100.0)
                 {
-                    BonusProb -= 10.0;
+                    bonus -= 10.0;
                     Book = false;
                 }
                 else
@@ -105,186 +110,133 @@ namespace RefineCalc
                 }
             }
 
-            double tmpProb = BonusProb - 10 * Convert.ToInt32(Book);
+            double tmpProb = bonus - 10 * Convert.ToInt32(Book);
             while (tmpProb > tableProb)
             {
-                double maxP = new double[] { Convert.ToInt32(NumBig > 0) * 1 / ThresholdBig, Convert.ToInt32(NumMed > 0) * 1 / ThresholdMed,
-                                            Convert.ToInt32(NumSmall > 0) * 1 / ThresholdSmall, Convert.ToInt32(Book) * 1 / ThresholdBook }.Max();
-                if (maxP == 1 / ThresholdBig && tmpProb - probBig >= tableProb)
+                var tmpArr = new List<(double threshold, double prob)>
+                { (Convert.ToInt32(NumBig > 0) * 1 / ThresholdBig, probBig),
+                    (Convert.ToInt32(NumMed > 0) * 1 / ThresholdMed, probMed),
+                    (Convert.ToInt32(NumSmall > 0) * 1 / ThresholdSmall, probSmall),
+                    (Convert.ToInt32(Book) * 1 / ThresholdBook, 10.0)
+                };
+                tmpArr.Sort((x, y) => y.threshold.CompareTo(x.threshold));
+
+                double extraP = 100.0;
+                for (int i = 0; i < tmpArr.Count; i++)
                 {
-                    tmpProb -= probBig;
-                    NumBig--;
+                    if (tmpArr[i].threshold > 0 && tmpArr[i].prob < tmpProb - tableProb)
+                    {
+                        extraP = tmpArr[i].prob;
+                        break;
+                    }
                 }
-                else if (maxP == 1 / ThresholdMed && tmpProb - probMed >= tableProb)
+
+                if (tmpProb - extraP >= tableProb)
                 {
-                    tmpProb -= probMed;
-                    NumMed--;
-                }
-                else if (maxP == 1 / ThresholdSmall && tmpProb - probSmall >= tableProb)
-                {
-                    tmpProb -= probSmall;
-                    NumSmall--;
+                    if (extraP == probBig)
+                    {
+                        tmpProb -= probBig;
+                        NumBig--;
+                    }
+                    else if (extraP == probMed)
+                    {
+                        tmpProb -= probMed;
+                        NumMed--;
+                    }
+                    else if (extraP == probSmall)
+                    {
+                        tmpProb -= probSmall;
+                        NumSmall--;
+                    }
+                    else
+                    {
+                        throw new Exception("Invalid extra probability");
+                    }
+                    tmpProb = Math.Round(tmpProb, 6);
                 }
                 else
                 {
                     break;
                 }
             }
-            if (tmpProb > tableProb) tmpProb = tableProb;
             BonusProb = tmpProb + 10 * Convert.ToInt32(Book);
 
             return this;
         }
 
-        public static Material CreateMaterial(
-            int numBig, int numMed, int numSmall,
-            double probBig, double probMed, double probSmall, double crntProb, double probMax,
-            string textBig, string textMed, string textSmall, string textBook,
-            int level, double ppp)
+        public Material Clone()
         {
-            double bonusProb = 0.0;
-            double gold = 0.0;
-            bool book = false;
-            double pBig = 99999.0;
-            double pMed = 99999.0;
-            double pSmall = 99999.0;
-            double pBook = 99999.0;
+            return new Material(this.CurrentProb, this.BonusProb, this.NumBig, this.NumMed, this.NumSmall, this.Book, this.PartialProb);
+        }
 
-            if (textBig != "")
+        public void Duplicate(Material mat)
+        {
+            this.CurrentProb = mat.CurrentProb;
+            this.BonusProb = mat.BonusProb;
+            this.NumBig = mat.NumBig;
+            this.NumMed = mat.NumMed;
+            this.NumSmall = mat.NumSmall;
+            this.Book = mat.Book;
+            this.PartialProb = mat.PartialProb;
+        }
+
+        public static void RebuildMaterials(List<Material> mats)
+        {
+            foreach(Material m in mats)
             {
-                pBig = Convert.ToDouble(textBig) / probBig;
+                m.CalcPartialProb(mats);
             }
-            numBig *= Convert.ToInt32(pBig <= ppp);
+        }
 
-            if (textMed != "")
+        public static void ReduceMaterials(List<Material> mats, double basePrice, double extraProb)
+        {
+            Material mat = mats.Last();
+            Material min = mat.Clone();
+            double minM = basePrice * (min.CurrentProb + min.BonusProb) / 100.0 + (2 * basePrice + min.Gold) * (100.0 - min.CurrentProb - min.BonusProb) / 100.0;
+            while (extraProb >= 0)
             {
-                pMed = Convert.ToDouble(textMed) / probMed;
-            }
-            numMed *= Convert.ToInt32(pMed <= ppp);
-
-            if (textSmall != "")
-            {
-                pSmall = Convert.ToDouble(textSmall) / probSmall;
-            }
-            numSmall *= Convert.ToInt32(pSmall <= ppp);
-
-            if (level <= 8 && textBook != "")
-            {
-                pBook = Convert.ToDouble(textBook) / 10.0;
-            }
-            book = pBook <= ppp;
-
-            bonusProb += probBig * numBig + probMed * numMed + probSmall * numSmall + Convert.ToInt32(book) * 10.0;
-            gold += Convert.ToDouble(textBig) * numBig + Convert.ToDouble(textMed) * numMed + Convert.ToDouble(textSmall) * numSmall + Convert.ToInt32(book) * Convert.ToDouble(textBook);
-
-            while (crntProb + bonusProb > 100.0)
-            {
-                double maxP = new double[] { Convert.ToInt32(numBig > 0) * pBig, Convert.ToInt32(numMed > 0) * pMed,
-                                            Convert.ToInt32(numSmall > 0) * pSmall, Convert.ToInt32(book) * pBook }.Max();
-                if (maxP == pBig && crntProb + bonusProb - probBig >= 100.0)
+                double maxP = new double[] { Convert.ToInt32(probBig <= extraProb) * Convert.ToInt32(mat.NumBig > 0) * 1 / ThresholdBig,
+                    Convert.ToInt32(probMed <= extraProb) * Convert.ToInt32(mat.NumMed > 0) * 1 / ThresholdMed,
+                    Convert.ToInt32(probSmall <= extraProb) * Convert.ToInt32(mat.NumSmall > 0) * 1 / ThresholdSmall,
+                    Convert.ToInt32(10.0 <= extraProb) * Convert.ToInt32(mat.Book) * 1 / ThresholdBook }.Max();
+                if (maxP == 1 / ThresholdBig)
                 {
-                    bonusProb -= probBig;
-                    gold -= Convert.ToDouble(textBig);
-                    numBig--;
+                    extraProb -= probBig;
+                    mat.bonus -= probBig;
+                    mat.NumBig--;
                 }
-                else if (maxP == pMed && crntProb + bonusProb - probMed >= 100.0)
+                else if (maxP == 1 / ThresholdMed)
                 {
-                    bonusProb -= probMed;
-                    gold -= Convert.ToDouble(textMed);
-                    numMed--;
+                    extraProb -= probMed;
+                    mat.bonus -= probMed;
+                    mat.NumMed--;
                 }
-                else if (maxP == pSmall && crntProb + bonusProb - probSmall >= 100.0)
+                else if (maxP == 1 / ThresholdSmall)
                 {
-                    bonusProb -= probSmall;
-                    gold -= Convert.ToDouble(textSmall);
-                    numSmall--;
+                    extraProb -= probSmall;
+                    mat.bonus -= probSmall;
+                    mat.NumSmall--;
                 }
-                else if (maxP == pBook && crntProb + bonusProb - 10.0 >= 100.0)
+                else if (maxP == 1 / ThresholdBook)
                 {
-                    bonusProb -= 10.0;
-                    gold -= Convert.ToDouble(textBook);
-                    book = false;
+                    extraProb -= 10.0;
+                    mat.bonus -= 10.0;
+                    mat.Book = false;
                 }
                 else
                 {
                     break;
                 }
-            }
-
-            if (book)
-            {
-                while (bonusProb > probMax + 10)
+                extraProb = Math.Round(extraProb, 6);
+                
+                double matM = basePrice * (mat.CurrentProb + mat.BonusProb) / 100.0 + (2 * basePrice + mat.Gold) * (100.0 - mat.CurrentProb - mat.BonusProb) / 100.0;
+                if(minM > matM)
                 {
-                    double maxP = new double[] { Convert.ToInt32(numBig > 0) * pBig, Convert.ToInt32(numMed > 0) * pMed,
-                                            Convert.ToInt32(numSmall > 0) * pSmall }.Max();
-                    if (maxP == pBig && bonusProb - 10 - probBig >= probMax)
-                    {
-                        bonusProb -= probBig;
-                        gold -= Convert.ToDouble(textBig);
-                        numBig--;
-                    }
-                    else if (maxP == pMed && bonusProb - 10 - probMed >= probMax)
-                    {
-                        bonusProb -= probMed;
-                        gold -= Convert.ToDouble(textMed);
-                        numMed--;
-                    }
-                    else if (maxP == pSmall && bonusProb - 10 - probSmall >= probMax)
-                    {
-                        bonusProb -= probSmall;
-                        gold -= Convert.ToDouble(textSmall);
-                        numSmall--;
-                    }
-                    else
-                    {
-                        break;
-                    }
+                    minM = matM;
+                    min.Duplicate(mat);
                 }
-                if (bonusProb > probMax + 10)
-                    bonusProb = probMax + 10;
             }
-            else
-            {
-                while (bonusProb > probMax)
-                {
-                    double maxP = new double[] { Convert.ToInt32(numBig > 0) * pBig, Convert.ToInt32(numMed > 0) * pMed,
-                                            Convert.ToInt32(numSmall > 0) * pSmall }.Max();
-                    if (maxP == pBig && bonusProb - probBig >= probMax)
-                    {
-                        bonusProb -= probBig;
-                        gold -= Convert.ToDouble(textBig);
-                        numBig--;
-                    }
-                    else if (maxP == pMed && bonusProb - probMed >= probMax)
-                    {
-                        bonusProb -= probMed;
-                        gold -= Convert.ToDouble(textMed);
-                        numMed--;
-                    }
-                    else if (maxP == pSmall && bonusProb - probSmall >= probMax)
-                    {
-                        bonusProb -= probSmall;
-                        gold -= Convert.ToDouble(textSmall);
-                        numSmall--;
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-                if (bonusProb > probMax)
-                    bonusProb = probMax;
-            }
-
-            return new Material(crntProb, bonusProb, numBig, numMed, numSmall, book);
-        }
-        
-        public static void ReduceMaterials(List<Material> mats)
-        {
-            // with while loop
-            // while(condition = when profit/loss are switched)
-            //      if(calc profit/loss == profit)
-            //          remove 1 lowest efficient meterial
+            mats[mats.Count - 1] = min;
         }
 
         public static void RearrangeMaterials(List<Material> mats)
@@ -356,30 +308,15 @@ namespace RefineCalc
 
         public void CalcPartialProb(List<Material> mats)
         {
+            int index = mats.IndexOf(this);
             double total = 1.0;
-            foreach(Material m in mats)
+            for(int i = 0; i <= index; i++)
             {
-                if (m != mats.Last()) total *= 1 - (m.CurrentProb + m.BonusProb) / 100.0;
-                else total *= (m.CurrentProb + m.BonusProb) / 100.0;
+                if (i != index) total *= 1 - (mats[i].CurrentProb + mats[i].BonusProb) / 100.0;
+                else total *= (mats[i].CurrentProb + mats[i].BonusProb) / 100.0;
             }
 
             this.PartialProb = total;
         }
-
-        public static List<Material> CreateMaterialList()
-        {
-            List<Material> mats = new List<Material>();
-
-            return mats;
-        }
-
-        public static List<Material> RearrangeList(List<Material> mats)
-        {
-
-
-            return mats;
-        }
-
-        
     }
 }
