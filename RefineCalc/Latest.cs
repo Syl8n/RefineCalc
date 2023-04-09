@@ -32,6 +32,7 @@ namespace RefineCalc
         public bool Research1 { get; set; }
         public bool Research2 { get; set; }
         public bool Details { get; set; }
+        public bool Opti { get; set; }
 
         public static void WriteFile(Latest obj)
         {

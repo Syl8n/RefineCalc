@@ -16,6 +16,9 @@ namespace RefineCalc
         public const string FILENAME = "RefineData.xlsx";
         private double baseProb;
         private List<Table> tables = null;
+        private bool research1Disable = false;
+        private bool research2Disable = false;
+        public double eventProb;
 
         public Form1()
         {
@@ -75,11 +78,16 @@ namespace RefineCalc
                 cBoxGrade.SelectedIndex = latest.EquipGrade;
                 cBoxPart.SelectedIndex = latest.EquipPart;
                 cBoxLevel.SelectedIndex = latest.EquipLevel;
-                txtDisProb.Text = latest.Prob.ToString("F2");
+                txtDisProb.Text = latest.Prob.ToString("F3");
                 txtDisJangGi.Text = latest.JangGi.ToString("F2");
+                research1Disable = true;
                 cBoxResearch1.Checked = latest.Research1;
+                research1Disable = false;
+                research2Disable = true;
                 cBoxResearch2.Checked = latest.Research2;
+                research2Disable = false;
                 cBoxDetails.Checked = latest.Details;
+                cBoxOpt.Checked = latest.Opti;
             }
             catch
             {
@@ -92,27 +100,26 @@ namespace RefineCalc
             TableManager.LoadFromFile($@"{Application.StartupPath}\{FILENAME}");
         }
 
-        private void CalcJangGi(double tp, bool fBig, bool fMed, bool fSmall, bool fBook)
+        private void CalcJangGi(double tp, bool fBig, bool fMed, bool fSmall, bool fBook, double bookProb)
         {
             Table table = tables[cBoxLevel.SelectedIndex];
             double tableProb = table.BaseProb;
             double currentProb = Convert.ToDouble(txtDisProb.Text);
-            double tmpProb = baseProb;
+            double tmpProb = tableProb + eventProb;
             if (cBoxGrade.SelectedIndex == 0 && cBoxLevel.SelectedIndex <= 8 && cBoxResearch1.Checked)
             {
-                tmpProb -= 10.0;
+                tmpProb += 10.0;
             }
             else if (cBoxGrade.SelectedIndex == 1 && cBoxLevel.SelectedIndex <= 8 && cBoxResearch2.Checked)
             {
-                tmpProb -= 10.0;
+                tmpProb += 10.0;
             }
             int numOfFails = Convert.ToInt32((currentProb - tmpProb) * 10 / tableProb);
             double jangGi = Convert.ToDouble(txtDisJangGi.Text);
-            double sugTp;
             double allTp = tp + Convert.ToDouble(txtSubBig.Text) * table.SubNumBig
                 + Convert.ToDouble(txtSubMed.Text) * table.SubNumMed
                 + Convert.ToDouble(txtSubSmall.Text) * table.SubNumSmall;
-            if (cBoxLevel.SelectedIndex <= 8)
+            if (cBoxLevel.SelectedIndex <= 13)
             {
                 allTp += cBoxPart.SelectedIndex == 0 ? Convert.ToDouble(txtWpBook.Text) : Convert.ToDouble(txtArmBook.Text);
             }
@@ -128,19 +135,21 @@ namespace RefineCalc
                 bonusProb = tableProb;
                 //가격 조절 추가
             }
-            if (cBoxLevel.SelectedIndex <= 8) bonusProb += 10.0;
+            if (cBoxLevel.SelectedIndex <= 13) bonusProb += bookProb;
             Expected allExpected = Expected.BernoulliDis(allTp, jangGi, currentProb + bonusProb, tableProb * 0.1, numOfFails, cBoxDetails.Checked);
             txtResult.AppendText(Environment.NewLine + $"(풀숨+책) 장기백까지 {allExpected.Count}회 / 오버값: {allExpected.JangGi - 100.0:F2}%");
             txtResult.AppendText(Environment.NewLine + $"기대확률: {allExpected.Value:F3}% / 기대횟수: {allExpected.Tries:F2}");
             txtResult.AppendText(Environment.NewLine + $"기대비용: {Convert.ToInt32(allTp * allExpected.Tries)}G / 최대비용: {Convert.ToInt32(allExpected.MaxCost)}G");
-            if (cBoxDetails.Checked) txtResult.AppendText(allExpected.Log);
+            if (cBoxDetails.Checked) txtResult.AppendText(Environment.NewLine + $"1회 비용: {Convert.ToInt32(allTp)}G / 1회 확률: {currentProb + bonusProb:F2}%");
+            //if (cBoxDetails.Checked) txtResult.AppendText(allExpected.Log);
 
             // with no metarials
             Expected noExpected = Expected.BernoulliDis(tp, jangGi, currentProb, tableProb * 0.1, numOfFails, cBoxDetails.Checked);
             txtResult.AppendText(Environment.NewLine + $"(노숨) 장기백까지 {noExpected.Count}회 / 오버값: {noExpected.JangGi - 100.0:F2}%", Color.Red);
             txtResult.AppendText(Environment.NewLine + $"기대확률: {noExpected.Value:F3}% / 기대횟수: {noExpected.Tries:F2}", Color.Red);
             txtResult.AppendText(Environment.NewLine + $"기대비용 {Convert.ToInt32(tp * noExpected.Tries)}G / 최대비용: {Convert.ToInt32(noExpected.MaxCost)}G", Color.Red);
-            if (cBoxDetails.Checked) txtResult.AppendText(noExpected.Log, Color.Red);
+            if (cBoxDetails.Checked) txtResult.AppendText(Environment.NewLine + $"1회 비용: {Convert.ToInt32(tp)}G / 1회 확률: {currentProb:F2}%", Color.Red);
+            //if (cBoxDetails.Checked) txtResult.AppendText(noExpected.Log, Color.Red);
 
             // with Suggested submeterials
             double pBig = 0.0;
@@ -154,102 +163,72 @@ namespace RefineCalc
             if (txtSubSmall.Text != "")
                 pSmall = Convert.ToDouble(txtSubSmall.Text) / Convert.ToDouble(txtDisSubSmall.Text);
             if ((cBoxPart.SelectedIndex == 1 && txtArmBook.Text != "") || (cBoxPart.SelectedIndex == 0 && txtWpBook.Text != ""))
-                pBook = (cBoxPart.SelectedIndex == 0 ? Convert.ToDouble(txtWpBook.Text) : Convert.ToDouble(txtArmBook.Text)) / 10.0;
+                pBook = (cBoxPart.SelectedIndex == 0 ? Convert.ToDouble(txtWpBook.Text) : Convert.ToDouble(txtArmBook.Text)) / bookProb;
             int i = 0;
             double accProb = 0.0;
-            double accQ = 1.0;
-            double tries = 0.0;
-            double accGold = 0.0;
-            double totalGold = 0.0;
-            string sugStr = Environment.NewLine + "당신은 ";
-            if (numOfFails < 10)
+            List<Material> mats = new List<Material>();
+            Material.SetThresholds(tableProb, tp, currentProb,
+                                       txtDisSubBig.Text != "" ? Convert.ToDouble(txtSubBig.Text) : -999, Convert.ToDouble(txtDisSubBig.Text),
+                                       txtDisSubMed.Text != "" ? Convert.ToDouble(txtSubMed.Text) : -999, Convert.ToDouble(txtDisSubMed.Text),
+                                       txtDisSubSmall.Text != "" ? Convert.ToDouble(txtSubSmall.Text) : -999, Convert.ToDouble(txtDisSubSmall.Text),
+                                       cBoxPart.SelectedIndex == 0 ? (txtWpBook.Text != "" ? Convert.ToDouble(txtWpBook.Text) : -999)
+                                       : (txtArmBook.Text != "" ? Convert.ToDouble(txtArmBook.Text) : -999), bookProb);
+            for (int fails = numOfFails; jangGi < 100.0 && accProb < 1.0; i++)
             {
-                sugStr += $"{numOfFails + 1}번째 시도입니다" + Environment.NewLine + "(상세 루트)";
-            }
-            else
-            {
-                sugStr += "10+번째 시도입니다";
-            }
-            for (; jangGi < 100.0; i++)
-            {
-                double ppp = tp / currentProb;
-                /*
-                fBig = false;
-                fMed = false;
-                fSmall = false;
-                fBook = false;
-                bonusProb = 0.0;
-                sugTp = tp;
-                if (txtSubBig.Text != "" && pBig <= ppp)
-                {
-                    fBig = true;
-                    bonusProb += Convert.ToDouble(txtDisSubBig.Text) * tables[cBoxLevel.SelectedIndex].SubNumBig;
-                    sugTp += Convert.ToDouble(txtSubBig.Text) * tables[cBoxLevel.SelectedIndex].SubNumBig;
-                }
-                if (txtSubMed.Text != "" && pMed <= ppp)
-                {
-                    fMed = true;
-                    bonusProb += Convert.ToDouble(txtDisSubMed.Text) * tables[cBoxLevel.SelectedIndex].SubNumMed;
-                    sugTp += Convert.ToDouble(txtSubMed.Text) * tables[cBoxLevel.SelectedIndex].SubNumMed;
-                }
-                if (txtSubSmall.Text != "" && pSmall <= ppp)
-                {
-                    fSmall = true;
-                    bonusProb += Convert.ToDouble(txtDisSubSmall.Text) * tables[cBoxLevel.SelectedIndex].SubNumSmall;
-                    sugTp += Convert.ToDouble(txtSubSmall.Text) * tables[cBoxLevel.SelectedIndex].SubNumSmall;
-                }
-                if (bonusProb > tableProb)
-                {
-                    bonusProb = tableProb;
-                    // 가격 조절
-                }
-                if (cBoxLevel.SelectedIndex <= 8)
-                {
-                    if ((cBoxPart.SelectedIndex == 1 && txtArmBook.Text != "") || (cBoxPart.SelectedIndex == 0 && txtWpBook.Text != ""))
-                    {
-                        if (pBook <= ppp)
-                        {
-                            fBook = true;
-                            bonusProb += 10.0;
-                            sugTp += cBoxPart.SelectedIndex == 0 ? Convert.ToDouble(txtWpBook.Text) : Convert.ToDouble(txtArmBook.Text);
-                        }
-                    }
-                }
-                */
-                Material mat = Material.CreateMaterial(table.SubNumBig, table.SubNumMed, table.SubNumSmall,
-                                                Convert.ToDouble(txtDisSubBig.Text), Convert.ToDouble(txtDisSubMed.Text), Convert.ToDouble(txtDisSubSmall.Text), currentProb, tableProb,
-                                                txtSubBig.Text, txtSubMed.Text, txtSubSmall.Text, cBoxPart.SelectedIndex == 0 ? txtWpBook.Text : txtArmBook.Text,
-                                                cBoxLevel.SelectedIndex, ppp);
-                double tempProb = currentProb + mat.BonusProb;
-                sugTp = tp + mat.Gold;
-                accProb += accQ * (tempProb / 100.0);
-                accGold += (i + 1) * sugTp * accQ * (tempProb / 100.0);
-                tries += (i + 1) * accQ * (tempProb / 100.0);
-                accQ *= 1 - (tempProb / 100.0);
-                jangGi += tempProb * 0.465;
-                totalGold += sugTp;
-                if (numOfFails < 10)
+                Material mat = new Material().SetMaterial(currentProb, cBoxLevel.SelectedIndex, table.SubNumBig, table.SubNumMed, table.SubNumSmall, bookProb);
+                mats.Add(mat);
+                mat.CalcPartialProb(mats);
+                accProb += mat.PartialProb;
+                jangGi += (mat.CurrentProb + mat.BonusProb) * 0.465;
+                if (fails < 10)
                 {
                     currentProb += tableProb * 0.1;
-                    numOfFails++;
+                    fails++;
                     
                 }
-                sugStr += Environment.NewLine + $"{i + 1}) ";
-                if (mat.NumBig > 0) sugStr += $"+가호{mat.NumBig}";
-                if (mat.NumMed > 0) sugStr += $"+축복{mat.NumMed}";
-                if (mat.NumSmall > 0) sugStr += $"+은총{mat.NumSmall}";
-                if (mat.Book) sugStr += "+책";
-                if (!(mat.NumBig > 0) && !(mat.NumMed > 0) && !(mat.NumSmall > 0) && !mat.Book) sugStr += "노숨";
+            }
+
+            // Rearrange the mat tables to minimize gold/the number of trials
+            if (cBoxOpt.Checked)
+            {
+                double extraJanggi = Math.Min(Convert.ToDouble(txtDisJangGi.Text) + mats.Last().Janggi(mats) - 100.0, mats.Last().BonusProb * 0.465);
+                if (txtSubBig.Text != "" && extraJanggi / 0.465 > Convert.ToDouble(txtDisSubBig.Text) && mats.Last().NumBig > 0
+                    || txtSubMed.Text != "" && extraJanggi / 0.465 > Convert.ToDouble(txtDisSubMed.Text) && mats.Last().NumMed > 0
+                    || txtSubSmall.Text != "" && extraJanggi / 0.465 > Convert.ToDouble(txtDisSubSmall.Text) && mats.Last().NumSmall > 0
+                    || cBoxPart.SelectedIndex == 0 && txtWpBook.Text != "" && extraJanggi / 0.465 > bookProb && mats.Last().Book
+                    || cBoxPart.SelectedIndex == 1 && txtArmBook.Text != "" && extraJanggi / 0.465 > bookProb && mats.Last().Book)
+                {
+                    Material.ReduceMaterials(mats, tp, extraJanggi / 0.465, bookProb);
+                    Material.RebuildMaterials(mats);
+                }
+                mats = Material.RearrangeMaterials(mats, tp, table.SubNumBig, table.SubNumMed, table.SubNumSmall, cBoxLevel.SelectedIndex, bookProb);
+                Material.RebuildMaterials(mats);
+            }
+
+            // Display the result
+            txtResult.AppendText(Environment.NewLine + $"(추천) 장기백까지 {i}회 / 오버값: {(mats.Last().AccProb(mats) < 1.0 ? Convert.ToDouble(txtDisJangGi.Text) + mats.Last().Janggi(mats) - 100.0 : 0.00):F2}%", Color.Blue);
+            txtResult.AppendText(Environment.NewLine + $"기대확률: {(mats.Last().AccProb(mats) > 1.0 ? 100.000 : mats.Last().AccProb(mats) * 100):F3}% / 기대횟수: {mats.Last().Tries(mats):F2}", Color.Blue);
+            txtResult.AppendText(Environment.NewLine + $"기대비용: {Convert.ToInt32(mats.Last().ExpGold(mats, tp))}G / 최대비용: {Convert.ToInt32(mats.Last().AccGold(mats, tp))}G", Color.Blue);
+#if DEBUG
+            txtResult.AppendText(Environment.NewLine + $"Thresholds: {Material.ThresholdBig:F3}, {Material.ThresholdMed:F3}, {Material.ThresholdSmall:F3}, {Material.ThresholdBook:F3}", Color.Blue);
+#endif
+            txtResult.AppendText(Environment.NewLine + "당신은 " + (numOfFails < 10 ? $"{numOfFails + 1}번째 시도입니다" : "10+번째 시도입니다"), Color.Blue);
+            txtResult.AppendText(Environment.NewLine + "(상세 루트)");
+            for (i = 0; i < mats.Count; i++)
+            {
+                txtResult.AppendText(Environment.NewLine + $"{numOfFails + i + 1})", Color.Blue);
+                if (mats[i].NumBig > 0) txtResult.AppendText($"+가호{mats[i].NumBig}", Color.Blue);
+                if (mats[i].NumMed > 0) txtResult.AppendText($"+축복{mats[i].NumMed}", Color.Blue);
+                if (mats[i].NumSmall > 0) txtResult.AppendText($"+은총{mats[i].NumSmall}", Color.Blue);
+                if (mats[i].Book) txtResult.AppendText("+책", Color.Blue);
+                if (mats[i].NumBig == 0 && mats[i].NumMed == 0 && mats[i].NumSmall == 0 && !mats[i].Book) txtResult.AppendText("노숨", Color.Blue); ;
                 if (cBoxDetails.Checked)
                 {
-                    sugStr += Environment.NewLine + $"누적 기댓값: {accProb * 100:F3}%" + Environment.NewLine + $"누적 소모비용: {Convert.ToInt32(totalGold)}G / 장기: {jangGi:F2}%";
-                    sugStr += Environment.NewLine + $"{sugTp:F2}G / {tempProb:F2}% / {sugTp / tempProb:F2}";
+                    txtResult.AppendText(Environment.NewLine + $"누적 기댓값: {mats[i].AccProb(mats) * 100:F3}%"
+                        + Environment.NewLine + $"누적 소모비용: {Convert.ToInt32(mats[i].AccGold(mats, tp))}G / 장기: {Convert.ToDouble(txtDisJangGi.Text) + mats[i].Janggi(mats):F2}%");
+                    txtResult.AppendText(Environment.NewLine + $"1회 비용: {Convert.ToInt32(tp + mats[i].Gold)}G / 1회 확률: {mats[i].CurrentProb + mats[i].BonusProb:F2}%");
                 }
             }
-            txtResult.AppendText(Environment.NewLine + $"(추천) 장기백까지 {i}회 / 오버값: {jangGi - 100.0:F2}%", Color.Blue);
-            txtResult.AppendText(Environment.NewLine + $"기대확률: {accProb * 100:F3}% / 기대횟수: {tries:F2}", Color.Blue);
-            txtResult.AppendText(Environment.NewLine + $"기대비용: {Convert.ToInt32(accGold)}G / 최대비용: {Convert.ToInt32(totalGold)}G", Color.Blue);
-            txtResult.AppendText(sugStr, Color.Blue);
         }
 
         private void calcEfficiency()
@@ -322,12 +301,24 @@ namespace RefineCalc
                 }
 
                 bool fBook = false;
-                
+                double bookProb = 1.0;
                 if ((cBoxPart.SelectedIndex == 1 && txtArmBook.Text != "") || (cBoxPart.SelectedIndex == 0 && txtWpBook.Text != ""))
                 {
-                    if (cBoxLevel.SelectedIndex <= 8)
+                    if (cBoxLevel.SelectedIndex <= 13)
                     {
-                        double pBook = (cBoxPart.SelectedIndex == 0 ? Convert.ToDouble(txtWpBook.Text) : Convert.ToDouble(txtArmBook.Text)) / 10.0;
+                        if (cBoxLevel.SelectedIndex <= 10)
+                        {
+                            bookProb = 10.0;
+                        }
+                        else if (cBoxLevel.SelectedIndex == 11 || cBoxLevel.SelectedIndex == 12)
+                        {
+                            bookProb = 5.0;
+                        }
+                        else if (cBoxLevel.SelectedIndex == 13)
+                        {
+                            bookProb = 3.0;
+                        }
+                        double pBook = (cBoxPart.SelectedIndex == 0 ? Convert.ToDouble(txtWpBook.Text) : Convert.ToDouble(txtArmBook.Text)) / bookProb;
                         if (pBook <= ppp)
                         {
                             txtResult.AppendText("\n(추천) ", Color.Blue);
@@ -337,7 +328,7 @@ namespace RefineCalc
                         {
                             txtResult.AppendText("\n(비추천) ", Color.Red);
                         }
-                        txtResult.AppendText($"야금/재봉 1%당 {pBook:F2}G");
+                        txtResult.AppendText($"야금/재봉 1%당 {pBook:F2}G\n책 확률: {bookProb:F2}%");
                     }
                     else
                     {
@@ -345,7 +336,7 @@ namespace RefineCalc
                     }
                 }
 
-                CalcJangGi(basePrice, fBig, fMed, fSmall, fBook);
+                CalcJangGi(basePrice, fBig, fMed, fSmall, fBook, bookProb);
             }
             catch (Exception ex)
             {
@@ -388,8 +379,9 @@ namespace RefineCalc
                 txtDisOreha.Text = tables[cBoxLevel.SelectedIndex].OrehaNeeds.ToString();
                 txtDisHonour.Text = tables[cBoxLevel.SelectedIndex].HonourNeeds.ToString();
                 txtDisGold.Text = tables[cBoxLevel.SelectedIndex].GoldNeeds.ToString();
-                baseProb = tables[cBoxLevel.SelectedIndex].BaseProb;
-                txtDisProb.Text = GetEditedBaseProb(baseProb).ToString("F2");
+                eventProb = 0; // 20 * Convert.ToInt32(cBoxLevel.SelectedIndex <= 8);
+                baseProb = tables[cBoxLevel.SelectedIndex].BaseProb + eventProb;
+                txtDisProb.Text = GetEditedBaseProb(baseProb).ToString("F3");
                 txtDisSubBig.Text = tables[cBoxLevel.SelectedIndex].SubProbBig.ToString("F2");
                 txtDisSubMed.Text = tables[cBoxLevel.SelectedIndex].SubProbMed.ToString("F2");
                 txtDisSubSmall.Text = tables[cBoxLevel.SelectedIndex].SubProbSmall.ToString("F2");
@@ -443,9 +435,10 @@ namespace RefineCalc
                 return;
             }
             double currentProb = Convert.ToDouble(txtDisProb.Text);
-            if(currentProb < baseProb * 2)
+            if(currentProb < tables[cBoxLevel.SelectedIndex].BaseProb * 2 + 10 * Convert.ToInt32((cBoxResearch1.Checked && cBoxGrade.SelectedIndex == 0 && cBoxLevel.SelectedIndex <= 8)
+                || cBoxResearch2.Checked && cBoxGrade.SelectedIndex == 1 && cBoxLevel.SelectedIndex <= 8))
             {
-                txtDisProb.Text = (currentProb + baseProb * 0.1).ToString("F2");
+                txtDisProb.Text = (currentProb + tables[cBoxLevel.SelectedIndex].BaseProb * 0.1).ToString("F3");
                 calcEfficiency();
             }
         }
@@ -456,7 +449,7 @@ namespace RefineCalc
             {
                 int i;
                 Latest latest = new Latest();
-                if(int.TryParse(txtWpStone.Text, out i))
+                if (int.TryParse(txtWpStone.Text, out i))
                     latest.WpStone = i;
                 if (int.TryParse(txtArmStone.Text, out i))
                     latest.ArmStone = i;
@@ -482,12 +475,15 @@ namespace RefineCalc
                 latest.EquipLevel = cBoxLevel.SelectedIndex;
                 double d;
                 if (double.TryParse(txtDisProb.Text, out d))
+                {
                     latest.Prob = d;
+                }
                 if (double.TryParse(txtDisJangGi.Text, out d))
                     latest.JangGi = d;
                 latest.Research1 = cBoxResearch1.Checked;
                 latest.Research2 = cBoxResearch2.Checked;
                 latest.Details = cBoxDetails.Checked;
+                latest.Opti = cBoxOpt.Checked;
 
                 Latest.WriteFile(latest);
             }
@@ -517,15 +513,20 @@ namespace RefineCalc
         {
             try
             {
+                if (research1Disable) return;
                 if (cBoxGrade.SelectedIndex == 0 && cBoxLevel.SelectedIndex != -1 && txtDisProb.Text != "")
                 {
                     if (cBoxResearch1.Checked)
                     {
-                        txtDisProb.Text = GetEditedBaseProb(Convert.ToDouble(txtDisProb.Text)).ToString("F2");
+                        txtDisProb.Text = GetEditedBaseProb(Convert.ToDouble(txtDisProb.Text)).ToString("F3");
                     }
                     else if (!cBoxResearch1.Checked)
                     {
-                        txtDisProb.Text = (Convert.ToDouble(txtDisProb.Text) - 10.0).ToString("F2"); ;
+                        if (cBoxGrade.SelectedIndex == 0 && cBoxLevel.SelectedIndex <= 8)
+                        {
+                            baseProb = Convert.ToDouble(txtDisProb.Text) - 10.0;
+                            txtDisProb.Text = baseProb.ToString("F3");
+                        }
                     }
                 }
             }
@@ -539,15 +540,20 @@ namespace RefineCalc
         {
             try
             {
+                if (research2Disable) return;
                 if (cBoxGrade.SelectedIndex == 1 && cBoxLevel.SelectedIndex != -1 && txtDisProb.Text != "")
                 {
                     if (cBoxResearch2.Checked)
                     {
-                        txtDisProb.Text = GetEditedBaseProb(Convert.ToDouble(txtDisProb.Text)).ToString("F2");
+                        txtDisProb.Text = GetEditedBaseProb(Convert.ToDouble(txtDisProb.Text)).ToString("F3");
                     }
                     else if (!cBoxResearch2.Checked)
                     {
-                        txtDisProb.Text = (Convert.ToDouble(txtDisProb.Text) - 10.0).ToString("F2"); ;
+                        if (cBoxGrade.SelectedIndex == 1 && cBoxLevel.SelectedIndex <= 8)
+                        {
+                            baseProb = Convert.ToDouble(txtDisProb.Text) - 10.0;
+                            txtDisProb.Text = baseProb.ToString("F3");
+                        }
                     }
                 }
             }
